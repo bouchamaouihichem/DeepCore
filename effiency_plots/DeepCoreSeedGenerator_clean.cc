@@ -95,13 +95,9 @@ public:
   static constexpr int Nover = 3;     //Max number of tracks recorded per pixel
   static constexpr int Npar = 5;      //Number of track parameter
 
-  // DeepCore 2.1.2 thresholds delta
-  //double dth[3] = {0.0, 0.2375, 0.1875};
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DeepCore 2.1.3 thresholds delta 
+  // DeepCore 2.2.1 thresholds delta
   double dth[3] = {0.0, 0.15, 0.3};
   double dthl[3] = {0.1, 0.05, 0};
-
 
 private:
   void produce(edm::Event&, const edm::EventSetup&) override;
@@ -163,7 +159,6 @@ private:
       tensorflow::NamedTensorList, std::vector<std::string>);
 };
 
-// All the parameters below are set up at the end. e.g: ptMin = 100 GeV 
 DeepCoreSeedGenerator::DeepCoreSeedGenerator(const edm::ParameterSet& iConfig, const tensorflow::SessionCache* cache)
     : vertices_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("vertices"))),
       pixelClusters_(
@@ -216,44 +211,24 @@ void DeepCoreSeedGenerator::produce(edm::Event& iEvent, const edm::EventSetup& i
 
   for (const auto& jet : cores) {  // jet loop
 
-    if (jet.pt() > ptMin_) { // Considering jets that pass pT selection of 100 GeV
+    if (jet.pt() > ptMin_) {
       std::set<unsigned long long int> ids;
-      const reco::Vertex& jetVertex = vertices[0]; // Assuming the jet came from the main PV
-     // DeepCore 1.0:
-      /*
-      std::vector<GlobalVector> splitClustDirSet =
-                  splittedClusterDirections(jet, tTopo, pixelCPE, jetVertex, 1, inputPixelClusters_);
-      bool l2off = (splitClustDirSet.empty());
+      const reco::Vertex& jetVertex = vertices[0];
 
-      //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      // DeepCore 2.1.3:
-      */
-      // Finding the sum of adc within 30x30 window for each BPIX layer (1,2,3,4). splittedClusterDirections is explained where teh function is defined,
-      // but basically it selected the cluster and defines the cluster direction which we use to open the 30x30 windows.
-      // Once we do that, we can Find the sum of adc within the 30x30 window for each BPIX layer (1,2,3,4).
-      // I'm not sure where the 30x30 window is defined within the function
-      // itself, so there is a chance that its not checking whether the sum of
-      // adc is 0 withing a 30x30 window but within a smaller range?
       std::vector<GlobalVector> splitClustDirSet =
           splittedClusterDirections(jet, tTopo, pixelCPE, jetVertex, 2, inputPixelClusters_);
-      bool l2off = (splitClustDirSet.empty());
+      bool l2off = (splitClustDirSet.empty());  // no adc BPIX2
       splitClustDirSet = splittedClusterDirections(jet, tTopo, pixelCPE, jetVertex, 3, inputPixelClusters_);
-      bool l134off = (splitClustDirSet.empty());
+      bool l134off = (splitClustDirSet.empty());  // no adc BPIX1 or BPIX3 or BPIX4
       splitClustDirSet = splittedClusterDirections(jet, tTopo, pixelCPE, jetVertex, 4, inputPixelClusters_);
       l134off = (splitClustDirSet.empty() && l134off);
       splitClustDirSet = splittedClusterDirections(jet, tTopo, pixelCPE, jetVertex, 1, inputPixelClusters_);
       l134off = (splitClustDirSet.empty() && l134off);
 
-
-      //if there is no adc on BPIX1 then find directions on BPIX2. This is the case where BPIX2 is used to define the cluster direction AND TCPs
-      // It's unclear to me how we can define a seed later since we only use the predicted TCP position here and not the cluster barycenter
-      if (splitClustDirSet.empty()) {  
+      if (splitClustDirSet.empty()) {  //if layer 1 is broken find direcitons on layer 2
         splitClustDirSet = splittedClusterDirections(jet, tTopo, pixelCPE, jetVertex, 2, inputPixelClusters_);
       }
-      // idk wjat this is
       splitClustDirSet.emplace_back(GlobalVector(jet.px(), jet.py(), jet.pz()));
-      // Now we loop over the number over the clusters associated to this jet
-      // and init the input tensors?? 
       for (int cc = 0; cc < (int)splitClustDirSet.size(); cc++) {
         tensorflow::NamedTensorList input_tensors;  //TensorFlow tensors init
         input_tensors.resize(3);
@@ -274,29 +249,25 @@ void DeepCoreSeedGenerator::produce(edm::Event& iEvent, const edm::EventSetup& i
             }
           }
         }  //end of TensorFlow tensors init
-        // idk what this is
+
         GlobalVector bigClustDir = splitClustDirSet[cc];
-        
-        // we set jet pt and eta to the input tensor
+
         jetEta_ = jet.eta();
         jetPt_ = jet.pt();
         input_tensors[0].second.matrix<float>()(0, 0) = jet.eta();
         input_tensors[1].second.matrix<float>()(0, 0) = jet.pt();
-         
-        // idk what detector selector does, but it seems to be looking for an
-        // interestection between BPIX2 and the cluster dir so it can find
-        // pixel information
+
         const GeomDet* globDet = DetectorSelector(
             2, jet, bigClustDir, jetVertex, tTopo, inputPixelClusters_);  //det. aligned to bigClustDir on L2
 
         if (globDet == nullptr)  //no intersection between bigClustDir and pixel detector modules found
           continue;
-        // this is how we get pixel adc from other layers
+
         const GeomDet* goodDet1 = DetectorSelector(1, jet, bigClustDir, jetVertex, tTopo, inputPixelClusters_);
         const GeomDet* goodDet3 = DetectorSelector(3, jet, bigClustDir, jetVertex, tTopo, inputPixelClusters_);
         const GeomDet* goodDet4 = DetectorSelector(4, jet, bigClustDir, jetVertex, tTopo, inputPixelClusters_);
 
-        for (const auto& detset : inputPixelClusters_) { // looping over pixels? idk what detset is
+        for (const auto& detset : inputPixelClusters_) {
           const GeomDet* det = geometry_->idToDet(detset.id());
 
           for (const auto& aCluster : detset) {
@@ -317,11 +288,11 @@ void DeepCoreSeedGenerator::produce(edm::Event& iEvent, const edm::EventSetup& i
 
             LocalPoint clustPos_local =
                 pixelCPE->localParametersV(aCluster, (*geometry_->idToDetUnit(detset.id())))[0].first;
-            // I think it's checking if the TCP is within the window?
+
             if (std::abs(clustPos_local.x() - localInter.x()) / pitchX_ <= jetDimX / 2 &&
                 std::abs(clustPos_local.y() - localInter.y()) / pitchY_ <=
                     jetDimY / 2) {  //used the baricenter, better description maybe useful
-              // idk what its doing but it's filling the pixel matrix
+
               if (det == goodDet1 || det == goodDet3 || det == goodDet4 || det == globDet) {
                 fillPixelMatrix(aCluster, lay, localInter, det, input_tensors);
               }
@@ -333,16 +304,11 @@ void DeepCoreSeedGenerator::produce(edm::Event& iEvent, const edm::EventSetup& i
         std::pair<double[jetDimX][jetDimY][Nover][Npar], double[jetDimX][jetDimY][Nover]> seedParamNN =
             DeepCoreSeedGenerator::SeedEvaluation(input_tensors, output_names);
 
-        // looping over all pixels and overlaps and checking that prediction
-        // score passes the threshold
         for (int i = 0; i < jetDimX; i++) {
           for (int j = 0; j < jetDimY; j++) {
             for (int o = 0; o < Nover; o++) {
-            //    if (seedParamNN.second[i][j][o] > (probThr_ - o * 0.1 - (l2off ? 0.35 : 0))) {  // DeepCore 1.0   
-             // if (seedParamNN.second[i][j][o] > (probThr_ - o * 0.14)){ // DeepCore 2.1.1
-             // if (seedParamNN.second[i][j][o] > (probThr_ - dth[o])) {  // DeepCore 2.1.2
-                if (seedParamNN.second[i][j][o] > (probThr_ + dth[o] + (l2off ? 0.3 : 0) + (l134off ? dthl[o] : 0))) {  // DeepCore 2.1.3 and 2.2.1
-               ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+              if (seedParamNN.second[i][j][o] >
+                  (probThr_ + dth[o] + (l2off ? 0.3 : 0) + (l134off ? dthl[o] : 0))) {  // DeepCore 2.2.1 Threshold
                 std::pair<bool, Basic3DVector<float>> interPair =
                     findIntersection(bigClustDir, (reco::Candidate::Point)jetVertex.position(), globDet);
                 auto localInter = globDet->specificSurface().toLocal((GlobalPoint)interPair.second);
@@ -355,27 +321,19 @@ void DeepCoreSeedGenerator::produce(edm::Event& iEvent, const edm::EventSetup& i
                 nx = nx + pixInter.first;
                 ny = ny + pixInter.second;
                 LocalPoint xyLocal = pixel2Local(nx, ny, globDet);
-                 
-                // Going back from local coordinates (dx, dy) that DeepCore
-                // predicts, to detector coordinates
+
                 double xx = xyLocal.x() + seedParamNN.first[i][j][o][0] * 0.01;  //0.01=internal normalization of NN
                 double yy = xyLocal.y() + seedParamNN.first[i][j][o][1] * 0.01;  //0.01=internal normalization of NN
                 LocalPoint localSeedPoint = LocalPoint(xx, yy, 0);
-                
-                // Going back from deta and and dphi to to detector eta and phi
+
                 double track_eta =
                     seedParamNN.first[i][j][o][2] * 0.01 + bigClustDir.eta();  //pay attention to this 0.01
-                // this is used to get normdirR down below, though idk what that is
                 double track_theta = 2 * std::atan(std::exp(-track_eta));
                 double track_phi =
                     seedParamNN.first[i][j][o][3] * 0.01 + bigClustDir.phi();  //pay attention to this 0.01
-                // DeepCore 2.1.3 and earlier use 1/pt instead of pt
-                // double pt = 1. / seedParamNN.first[i][j][o][4];
-                // DeepCore 2.2 and later
                 double pt = seedParamNN.first[i][j][o][4];
                 double normdirR = pt / sin(track_theta);
-                
-                // Thi seems to be some kind of selection for the seed?
+
                 const GlobalVector globSeedDir(
                     GlobalVector::Polar(Geom::Theta<double>(track_theta), Geom::Phi<double>(track_phi), normdirR));
                 LocalVector localSeedDir = globDet->surface().toLocal(globSeedDir);
@@ -390,7 +348,6 @@ void DeepCoreSeedGenerator::produce(edm::Event& iEvent, const edm::EventSetup& i
 
                 //Covariance matrix, the hadrcoded variances = NN residuals width
                 //(see https://twiki.cern.ch/twiki/bin/view/CMSPublic/NNJetCoreAtCtD2019)
-                // We might want to update these residuals, but idk how
                 float em[15] = {0,
                                 0,
                                 0,
@@ -448,7 +405,6 @@ std::pair<bool, Basic3DVector<float>> DeepCoreSeedGenerator::findIntersection(co
   return pos;
 }
 
-// this function changes pixel location from dx or dy to detector x and y
 std::pair<int, int> DeepCoreSeedGenerator::local2Pixel(double locX, double locY, const GeomDet* det) {
   LocalPoint locXY(locX, locY);
   float pixX = (dynamic_cast<const PixelGeomDetUnit*>(det))->specificTopology().pixel(locXY).first;
@@ -457,7 +413,6 @@ std::pair<int, int> DeepCoreSeedGenerator::local2Pixel(double locX, double locY,
   return out;
 }
 
- // this function changes pixel location from detector x and y to dx or dy
 LocalPoint DeepCoreSeedGenerator::pixel2Local(int pixX, int pixY, const GeomDet* det) {
   float locX = (dynamic_cast<const PixelGeomDetUnit*>(det))->specificTopology().localX(pixX);
   float locY = (dynamic_cast<const PixelGeomDetUnit*>(det))->specificTopology().localY(pixY);
@@ -465,8 +420,6 @@ LocalPoint DeepCoreSeedGenerator::pixel2Local(int pixX, int pixY, const GeomDet*
   return locXY;
 }
 
-// Seems like this function is checking whetehre the track has positive or
-// negative z and lipping it it's negative z, but idk why
 int DeepCoreSeedGenerator::pixelFlipper(const GeomDet* det) {
   int out = 1;
   LocalVector locZdir(0, 0, 1);
@@ -479,13 +432,11 @@ int DeepCoreSeedGenerator::pixelFlipper(const GeomDet* det) {
   return out;
 }
 
-// function taht fills pixel matrix
 void DeepCoreSeedGenerator::fillPixelMatrix(const SiPixelCluster& cluster,
                                             int layer,
                                             Point3DBase<float, LocalTag> inter,
                                             const GeomDet* det,
                                             tensorflow::NamedTensorList input_tensors) {
-  // idk what flip is
   int flip = pixelFlipper(det);  // 1=not flip, -1=flip
 
   for (int i = 0; i < cluster.size(); i++) {
@@ -499,13 +450,11 @@ void DeepCoreSeedGenerator::fillPixelMatrix(const SiPixelCluster& cluster,
       nx = nx + jetDimX / 2;
       ny = ny + jetDimY / 2;
       //14000 = normalization of ACD counts used in the NN
-      // not sure if 14000 is still a valid normalization
       input_tensors[2].second.tensor<float, 4>()(0, nx, ny, layer - 1) += (pix.adc) / (14000.f);
     }
   }
 }
 
-// Thiss sems the function where predictions are made?
 std::pair<double[DeepCoreSeedGenerator::jetDimX][DeepCoreSeedGenerator::jetDimY][DeepCoreSeedGenerator::Nover]
                 [DeepCoreSeedGenerator::Npar],
           double[DeepCoreSeedGenerator::jetDimX][DeepCoreSeedGenerator::jetDimY][DeepCoreSeedGenerator::Nover]>
@@ -534,7 +483,6 @@ DeepCoreSeedGenerator::SeedEvaluation(tensorflow::NamedTensorList input_tensors,
   return output_combined;
 }
 
-// Idk what this is
 const GeomDet* DeepCoreSeedGenerator::DetectorSelector(int llay,
                                                        const reco::Candidate& jet,
                                                        GlobalVector jetDir,
@@ -565,12 +513,6 @@ const GeomDet* DeepCoreSeedGenerator::DetectorSelector(int llay,
   return output;
 }
 
-// This where we select clusters on layer 1 or 2 and define the cluster
-// direction and require the deltaR the jet direction and cluster direction between them to be less than 0.25
-// the merged cluster direction is define as the direction from the main PV and
-// merged cluster barycenter, while the jet direction is the reco jet direction
-// I suppose the dR cut is to make sure that jet is truly associated with the
-// cluster we select?
 std::vector<GlobalVector> DeepCoreSeedGenerator::splittedClusterDirections(
     const reco::Candidate& jet,
     const TrackerTopology* const tTopo,
@@ -606,8 +548,6 @@ std::unique_ptr<tensorflow::SessionCache> DeepCoreSeedGenerator::initializeGloba
   return cache;
 }
 
-// This is where we specify the parameter for DeepCore evaluation. One thing
-// that caught my eye is chargeFractionMin, not sure whats that minimum
 void DeepCoreSeedGenerator::globalEndJob(tensorflow::SessionCache* cache) {}
 
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
@@ -616,25 +556,17 @@ void DeepCoreSeedGenerator::fillDescriptions(edm::ConfigurationDescriptions& des
   desc.add<edm::InputTag>("vertices", edm::InputTag("offlinePrimaryVertices"));
   desc.add<edm::InputTag>("pixelClusters", edm::InputTag("siPixelClustersPreSplitting"));
   desc.add<edm::InputTag>("cores", edm::InputTag("jetsForCoreTracking"));
-  desc.add<double>("ptMin", 100);  // the current training uses 500
+  desc.add<double>("ptMin", 100);    // the current training uses 500 GeV
   desc.add<double>("deltaR", 0.25);  // the current training uses 0.1
   desc.add<double>("chargeFractionMin", 18000.0);
   desc.add<double>("centralMIPCharge", 2);
   desc.add<std::string>("pixelCPE", "PixelCPEGeneric");
   desc.add<edm::FileInPath>(
       "weightFile",
-// DeepCore 1.0
-//    edm::FileInPath("RecoTracker/TkSeedGenerator/data/DeepCore/DeepCore_model_1.0.pb"));
-// DeepCore 2.1
- //   edm::FileInPath("RecoTracker/TkSeedGenerator/data/DeepCore/DeepCore_model_2.1.pb"));
-// DeepCore 2.2
-    edm::FileInPath("RecoTracker/TkSeedGenerator/data/DeepCore/DeepCore_model_2.2.pb"));
+      edm::FileInPath("RecoTracker/TkSeedGenerator/data/DeepCore/DeepCoreSeedGenerator_TrainedModel_barrel_2023.pb"));
   desc.add<std::vector<std::string>>("inputTensorName", {"input_1", "input_2", "input_3"});
   desc.add<std::vector<std::string>>("outputTensorName", {"output_node0", "output_node1"});
-//  desc.add<double>("probThr", 0.85); // DeepCore 1.0
-//  desc.add<double>("probThr", 0.32); // DeepCore 2.1.1
-//  desc.add<double>("probThr", 0.4875); // DeepCore 2.1.2
-  desc.add<double>("probThr", 0.7); // DeepCore 2.1.3 and 2.2.1
+  desc.add<double>("probThr", 0.7);  // DeepCore 2.2.1 baseline threshold
   descriptions.add("deepCoreSeedGenerator", desc);
 }
 
