@@ -2,12 +2,14 @@
 # using: 
 # Revision: 1.19 
 # Source: /local/reps/CMSSW/CMSSW/Configuration/Applications/python/ConfigBuilder.py,v 
-# with command line options: step3 -s RAW2DIGI,RECO:reconstruction_trackingOnly --conditions auto:phase1_2022_realistic --datatier AOD --eventcontent AOD --geometry DB:Extended --era Run3 -n 1000 --python_filename cmsDrive_timing_step3_JC.py --filein file:step2.root --fileout file:step3.root --customise Validation/Performance/TimeMemoryInfo.py --no_exec
+# with command line options: step3 -s RAW2DIGI,RECO:reconstruction_trackingOnly --conditions 130X_mcRun3_2023_realistic_relvals2023D_v1 --beamspot Realistic25ns13p6TeVEarly2023Collision --datatier AOD --eventcontent AOD --geometry DB:Extended --era Run3 --procModifiers seedingDeepCore --pileup Run3_Flat55To75_PoissonOOTPU --pileup_input das:/RelValMinBias_14TeV/CMSSW_13_0_0_pre4-130X_mcRun3_2022_realistic_v2-v1/GEN-SIM -n 1 --python_filename cmsDriver_step3.py --filein file:step2.root --fileout file:step3.root --customise Validation/Performance/TimeMemoryInfo.py --no_exec RAW2DIGI,RECO:reconstruction_trackingOnly,ENDJOB
 import FWCore.ParameterSet.Config as cms
 
 from Configuration.Eras.Era_Run3_cff import Run3
+from Configuration.ProcessModifiers.seedingDeepCore_cff import seedingDeepCore
 
-process = cms.Process('RECO',Run3)
+process = cms.Process('RECO',Run3,seedingDeepCore)
+#process = cms.Process('RECO',Run3)
 
 # import of standard configurations
 process.load('Configuration.StandardSequences.Services_cff')
@@ -29,18 +31,23 @@ process.maxEvents = cms.untracked.PSet(
 # Input source
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring(
-      "file:/eos/uscms/store/user/hichemb/DeepCore_11834_step12/DeepCore_11834_step12/230403_030639/0000/step2_1.root",
-      "file:/eos/uscms/store/user/hichemb/DeepCore_11834_step12/DeepCore_11834_step12/230403_030639/0000/step2_2.root",
-      "file:/eos/uscms/store/user/hichemb/DeepCore_11834_step12/DeepCore_11834_step12/230403_030639/0000/step2_3.root",
-      "file:/eos/uscms/store/user/hichemb/DeepCore_11834_step12/DeepCore_11834_step12/230403_030639/0000/step2_4.root",
-      "file:/eos/uscms/store/user/hichemb/DeepCore_11834_step12/DeepCore_11834_step12/230403_030639/0000/step2_5.root",
-      "file:/eos/uscms/store/user/hichemb/DeepCore_11834_step12/DeepCore_11834_step12/230403_030639/0000/step2_6.root",
-      "file:/eos/uscms/store/user/hichemb/DeepCore_11834_step12/DeepCore_11834_step12/230403_030639/0000/step2_7.root",
-      "file:/eos/uscms/store/user/hichemb/DeepCore_11834_step12/DeepCore_11834_step12/230403_030639/0000/step2_8.root",
-      "file:/eos/uscms/store/user/hichemb/DeepCore_11834_step12/DeepCore_11834_step12/230403_030639/0000/step2_9.root",
-      "file:/eos/uscms/store/user/hichemb/DeepCore_11834_step12/DeepCore_11834_step12/230403_030639/0000/step2_10.root"),
+      "file:step2_1.root",
+      "file:step2_2.root",
+      "file:step2_3.root",
+      "file:step2_4.root",
+      "file:step2_5.root",
+      "file:step2_6.root",
+      "file:step2_7.root",
+      "file:step2_8.root",
+      "file:step2_9.root",
+      "file:step2_10.root"),
     secondaryFileNames = cms.untracked.vstring()
 )
+# Input source
+#process.source = cms.Source("PoolSource",
+#    fileNames = cms.untracked.vstring('file:step2.root'),
+#    secondaryFileNames = cms.untracked.vstring()
+#)
 
 process.options = cms.untracked.PSet(
     FailPath = cms.untracked.vstring(),
@@ -67,7 +74,7 @@ process.options = cms.untracked.PSet(
     numberOfConcurrentLuminosityBlocks = cms.untracked.uint32(0),
     numberOfConcurrentRuns = cms.untracked.uint32(1),
     numberOfStreams = cms.untracked.uint32(0),
-    numberOfThreads = cms.untracked.uint32(8),
+    numberOfThreads = cms.untracked.uint32(1),
     printDependencies = cms.untracked.bool(False),
     sizeOfStackForThreadsInKB = cms.optional.untracked.uint32,
     throwIfIllegalParameter = cms.untracked.bool(True),
@@ -99,7 +106,7 @@ process.AODoutput = cms.OutputModule("PoolOutputModule",
 
 # Other statements
 from Configuration.AlCa.GlobalTag import GlobalTag
-process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2022_realistic', '')
+process.GlobalTag = GlobalTag(process.GlobalTag, '130X_mcRun3_2023_realistic_relvals2023D_v1', '')
 
 # Path and EndPath definitions
 process.raw2digi_step = cms.Path(process.RawToDigi)
