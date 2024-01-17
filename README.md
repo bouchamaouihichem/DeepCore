@@ -1,258 +1,350 @@
-# DeepCore
+# DeepCore Framework
 
-This repository contains the code related to DeepCore (the CNN-based approach for the seeding in high energy jet tracking, in CMS reconstruction), outside of CMSSW. Is mostrly related to the training step, and dedicated validation plotter.
+This repository contains the code and instructions related to the DeepCore2.0 framework. The Ntuplizer makes the training samples used for DeepCore2.0 trainings and the workflows are used to evaluate DeepCore2.0 models. This repository will include instructions to run the complete framework from scratch. More information about DeepCore2.0 can be found at: https://twiki.cern.ch/twiki/bin/view/CMSPublic/TrackingPOGRun3DeepCoreV2
 
-More information about DeepCore can be found at: https://twiki.cern.ch/twiki/bin/view/CMSPublic/NNJetCoreAtCtD2019
+## 1) The Ntuplizer (Ntuplizer/DeepCoreTraining)
+## A) Introduction:
+- The Ntuplizer consists of 2 steps: 
+	- Step 1 extract the relevant information from the GEN-SIM and AODSIM of the dataset you picked for DeepCore training
+		- The name of these files are inadequately named Ntuplizer_output_*.root where * is a number
+	- Step 2 takes the Ntuplizer_output_*.root file, and used the information inside to output the training samples
+		- The name of the files is DeepCoreTrainingSample_*.root
+	- Unless you are using a new dataset, you typically need to rerun only step2 of the Ntuplizer
+	  	- e.g: implementing pixel size fix, 1/pt -> pt fix ..etc only required running step 2
+	- Different files:
+	  	- Edit test_DeepCorePrepareInput.py and test_DeepCorePrepareInput_crab.py for step 1 of the Ntuplizer
+		- Edit test_DeepCoreNtuplizer.py and test_DeepCoreNtuplizer_crab.py for step 2 of the Ntuplizer
+		- Edit DeepCoreNtuplizer.cc to adjust things pertaining to the training samples (step 2)
+		  	- pixel size fix, saving pt instead of 1/pt, adding new variables in the training sample..
 
-This repository contains the following directories:
+- I used CMSSW_12_1_1,  but you should use whatever cms release is compatible with your dataset
+  	- You can read off the dataset (e.g: /RelValTTbar_14TeV/CMSSW_12_4_0-124X_mcRun3_2022_realistic_v5-v1/NANOAODSIM ---> CMSSW_12_4_0)
+	- Note: may need to change one line in DeepCoreNtuplizer.cc (static const int ->const int ) to compile with CMSSW_12_6_4
+- cmsrel CMSSW_12_1_1
+- cd CMSSW_12_1_1/src/
+- scram b -j 8 
+- cmsenv
+- if you haven't setup up Github with your CERN/fermilab account, please do that (adjust details accordingly):
+	- git config --global user.name "Hichem Bouchamaoui"
+	- git config --global user.email "bouchamaouihichem@gmail.com"
+	- git config --global user.github bouchamaouihichem
+- git cms-addpkg RecoTracker
+- cd RecoTracker/
+- copy Ntuplizer folder from the DeepCore repo (Ntuplizer/DeepCoreTraining)
+- Go back to src to compile : 
+	- cd .. 
+	- scram b -j 8
+- cmsenv
+- voms-proxy-init --voms cms
 
-## training 
-It contains the script `DeepCore.py` which is the Neural Network itself. Is primary purpose is to train the model which will be used in CMSSW. The details of the usage and the options are described in the comments inside the script.
-- input: root file produced using the DeepCoreNtuplizer in CMSSW (from this branch: https://github.com/vberta/cmssw/tree/CMSSW_12_0_0_pre4_DeepCoreTraining). Can be used a local input (`--input` argument) or the full statistic ntuple (hardcoded in the script) produced with the full statistic centrally produced sample. 
-- training: `--training` argument performs the training, given the input
-   - performed over the local input (if `--input` is used) or the central input.
-   - Can be performed in multiple steps using the option `--continueTraining` from a previously produded training.
-   - Epochs and input (in case of `--continueTraining`) are hardcoded, must be set in the script.
-   - The details of the barrel training used in the integrated result are provided within the `DeepCore.py` script. 
-   - Produces the `loss_file*.pdf` file, with the loss evolution.
-   - Strongly suggested to use GPU
-   - ROOT not required for this step
-   - return two files: `DeepCore_train*.h5` (the weights to do prediction and so on) and `DeepCore_model*.h5` (the full model needed for CMSSW)
-- prediction: `--predict` argument performs the prediction on the provided `--input`
-   - if used together with `--training`  the prediction will be performed on the same sample
-   - if `--input` is missing the prediction is performed on the centrally proded input
-   - return `DeepCore_prediction*.npz`
-- output:  `--output` argument perform validations on the prediction
-   -  produces dedicated plots
-   -  store the results in `DeepCore_mapValidation*`.root and `parameter_file*.pdf`
+## C) Running the Ntuplizer (after fresh login):
+- cmsenv
+- voms-proxy-init --voms cms
+- Edit the files for step 1 of the Ntuplizer as needed
+	- Check the Deep Dive into Ntuplizer files section before proceeding.
+- crab submit test_DeepCorePrepareInput_crab.py 
+- once the jobs are done running, edit the files for step 2 of the Ntuplizer as needed (specifically the output dataset name form step 1)
+- crab submit test_DeepCoreNtuplizer_crab.py 
+- Once the jobs are done running, you can find the training samples in your eos directory
 
-### Extra - the ntuplizer
-The ntuplizer is a module of CMSSW, and build the proper input for the training of DeepCore. 
-- it is contained in this branch https://github.com/vberta/cmssw/tree/CMSSW_12_0_0_pre4_DeepCoreTraining
-- to obtain the ntuple two steps are needed (respective scripts contained in the `test` directory):
-   1. `test_DeepCorePrepareInput.py` uses the two-file solution to combine AODSIM and GEN-SIM information and obtain a single .root file
-   2. `test_DeepCoreNtuplizer.py` uses the file produced in the step 1 to build the ntuple
-- the centrally produced samples are (2017 conditions, used in the integrated training):
-  - barrel AOD: `/QCD_Pt_1800to2400_TuneCUETP8M1_13TeV_pythia8/RunIISummer17DRPremix-92X_upgrade2017_realistic_v10-v5/AODSIM`
-  - barrel GENSIM: `/QCD_Pt_1800to2400_TuneCUETP8M1_13TeV_pythia8/RunIISummer17GS-92X_upgrade2017_realistic_v10-v1/GEN-SIM`
-  - barrel prepared input (after step1): `/QCD_Pt_1800to2400_TuneCUETP8M1_13TeV_pythia8/arizzi-TrainJetCoreAll-ddeeece6d9d1848c03a48f0aa2e12852/USER`
-  - endcap AOD: `/UBGGun_E-1000to7000_Eta-1p2to2p1_13TeV_pythia8/RunIIFall17DRStdmix-NoPU_94X_mc2017_realistic_v11-v2/AODSIM`
-  - endcap GENSIM: `/UBGGun_E-1000to7000_Eta-1p2to2p1_13TeV_pythia8/RunIIFall17DRStdmix-NoPU_94X_mc2017_realistic_v11-v2/GEN-SIM-DIGI-RAW`
-  - endcap prepared input (after step1): `/UBGGun_E-1000to7000_Eta-1p2to2p1_13TeV_pythia8/vbertacc-DeepCoreTrainingSampleEC_all-3b4718db5896f716d6af32b678bbc9f2/USER`
+## D) Deep Dive into Ntuplizer files:
+### a) test_DeepCorePrepareInput.py: (Ntuplizer step 1): 
+- Things that might need editing:
+	- adjust era if needed: Changed era to eras.Run3 in L5 as shown in this [twiki](https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideCmsDriverEras). Also potentially relevant [twiki](https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideGlobalHLT#Trigger_development_for_Run_3).
+	- adjust tag name if needed: Changed global tag to auto:phase1_2021_realistic in L72 as shown in this [twiki](https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideGlobalHLT#Setup_for_Running_on_MC_and_Data)
+	- Adjust output filename to Ntuplizer_output1.root in L55
+			- Don't forget to edit the other crab file, though the other crab job takes the publication name of the jobs rather than the files path
+			- It would be nice to adjust step 1 ouput file name form  Ntuplizer_output1.root to Ntuplizer_step1.root
+	- Changes I made between DeepCore 2 and DeepCore 1 that you probably don't need to worry about, but included here for completeness:
+		- Add missing parenthesis missing in test_DeepCorePrepareInput.py L41
+		- Comment out module in test_DeepCorePrepareInput.py (HLTrigger.Configuration.HLT_2018v32_cff) since it doesn't seem to be necessary. If it is necessary in the future look in this [Twiki](https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideGlobalHLT#Setup_for_Running_on_MC_and_Data).
+	- Note: Don't bother editing input files here since the input files specified in the crab config will be the ones used.
+ ### b) test_DeepCorePrepareInput_crab.py: (Ntuplizer step 1): 
+ - Things that you must edit:
+	- Change Request name in L4 to reflect the date or dataset: config.General.requestName = 'DeepCorePrepareInput1224'
+	- Change Output dataset name if you want: config.Data.outputDatasetTag = 'DeepCoreNtuplizerInput'
+	- edit in AODSIM and GEN-SIM or GEN-SIM-DIGI-RAW files L13-L14
+		- config.Data.inputDataset = '/RelValQCD_Pt_1800_2400_14/CMSSW_12_0_0_pre3-PU_120X_mcRun3_2021_realistic_v1_aodsim-v1/AODSIM'
+		- config.Data.secondaryInputDataset = '/RelValQCD_Pt_1800_2400_14/CMSSW_12_0_0_pre3-PU_120X_mcRun3_2021_realistic_v1-v1/GEN-SIM
+	- Adjust total number of events and event per job:
+		- Edited L25-L26 to specify number of jobs and units per jobs: (don't use the same numbers, these numbers assume a dataset of with 9000 events, you'll probably be using one with 1M+ )
+			- config.Data.unitsPerJob = 1000
+			- NJOBS = 9
+			- config.Data.totalUnits = config.Data.unitsPerJob * NJOBS
+		- PS: don't use the same numbers, these numbers assume a dataset of with 9* 1000 = 9000 9000 events, you'll probably be using one with 1M+ . In my experience, 1k events per job is ideal but 5k works.
+		- Potentially might need: config.Data.splitting = 'EventBased' in certain situations
+	- relevant [twiki](https://twiki.cern.ch/twiki/bin/view/CMSPublic/CRAB3ConfigurationFile) for crab config file
+	- When using Track Pog eos space (mainly due to storage reasons), need to:
+		- adjust site in L32 to T2_CH_CERN
+		- add line: config.Data.outLFNDirBase = '/store/group/phys_tracking/Hichemb/DeepCoreNtuplizer/'
+			- because the full dir is: /eos/cms/store/group/phys_tracking/Hichemb/DeepCoreNtuplizer
+		- check if there is space beforehand using: eos quota /eos/cms/store/group/phys_tracking/
+- Other changes you can ignore:
+  	- Deleted L28 since outdated: crab will automatically put output in your eos directory
+### c) test_DeepCoreNtuplizer.py: (Ntuplizer step 2):
+- Global tag adjustments:
+	- Remove  L16 and add these 2 lines:
+		- from Configuration.AlCa.GlobalTag import GlobalTag
+		- process.GlobalTag = GlobalTag(process.GlobalTag,'auto:phase1_2021_realistic','')
+	- This update guarantees that the config file will find the appropriate detector condition depending on the cmssw version of the dataset according to [twiki](https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideGlobalHLT#Setup_for_Running_on_MC_and_Data)
+		- "It is vital that the correct GlobalTag is used. One can take advantage of special GT keywords in [autoCond.py](https://github.com/cms-sw/cmssw/blob/master/Configuration/AlCa/python/autoCond.py) to specify a type of GT; autoCond.py then resolves to the appropriate GT for the CMSSW release that's being used. We use "auto:phase1_2021_realistic" for MC, and "auto:run3_hlt" for Data."
+- edit output file name in L60 if needed
+- adjust number of threads and streams in L30-L31 to 8 to match crab config file.
+### d) test_DeepCoreNtuplizer_crab.py: (Ntuplizer step 2):
+- edit input file L14: 
+	- published dataset name of the output of step1 on DBS (phys03) for DeepCore2.0: /RelValQCD_Pt_1800_2400_14/hboucham-DeepCoreNtuplizerInput-e101c270c65c32f52437c2373244ff6e/USER
+	- You need to find the name of the dataset published in DBS. To do that you can look at the end of the crab.log file of the jobs you submitted in step 1: (e.g: crab_projects/crab_DeepCorePrepareInput/crab.log)
+		- Alternatively you can copy it from the output of the crab status command 
+- Adjust total number of events and event per job:
+	- You can use the same numbers you used for step 1 of the Ntuplizer, which would require copying the same line and using EventLumiBased split. However it's easier to use Filebased split in this case and have 1 file per job
+		- Note that if you have some outdated files that you published in step 1 and deleted later, crab will still attempt to submit these jobs, which will result in some jobs failing. For example I have deleted the outdated Ntuplizer step 1 output files and kept the up to date ones (360), so when I submit jobs for step 2, crab reports that 360/562 jobs completed, which is the right number. If this is confusing them talk to me.
+- adjust site in L25 to T3_US_FNALLPC
+- Other changes you can ignore:
+	- edit python file used in L10: test_DeepCoreNtuplizer.py
+		- Looks like Valerio forgot to change the name from NNClustSeedInputSimHit_config.py
+	- Delete L19 since outdated: crab will automatically put output in your eos directory.
 
-<!---
-| barrel AOD                         |`/QCD_Pt_1800to2400_TuneCUETP8M1_13TeV_pythia8/RunIISummer17DRPremix-92X_upgrade2017_realistic_v10-v5/AODSIM`|
-| barrel GENSIM                      | `/QCD_Pt_1800to2400_TuneCUETP8M1_13TeV_pythia8/RunIISummer17GS-92X_upgrade2017_realistic_v10-v1/GEN-SIM`|
-| barrel prepared input (after step1)| `/QCD_Pt_1800to2400_TuneCUETP8M1_13TeV_pythia8/arizzi-TrainJetCoreAll-ddeeece6d9d1848c03a48f0aa2e12852/USER`|
-| endcap AOD                         | `/UBGGun_E-1000to7000_Eta-1p2to2p1_13TeV_pythia8/RunIIFall17DRStdmix-NoPU_94X_mc2017_realistic_v11-v2/AODSIM`|
-| endcap GENSIM                      |`/UBGGun_E-1000to7000_Eta-1p2to2p1_13TeV_pythia8/RunIIFall17DRStdmix-NoPU_94X_mc2017_realistic_v11-v2/GEN-SIM-DIGI-RAW`|
-| endcap prepared input (after step1)| `/UBGGun_E-1000to7000_Eta-1p2to2p1_13TeV_pythia8/vbertacc-DeepCoreTrainingSampleEC_all-3b4718db5896f716d6af32b678bbc9f2/USER`|
---->
+## 2) DeepCore2.0 (training/):
+## A) Introduction:
+Once you have the training samples from the Ntuplizer, remember to split them into training/validation/testing. The training of DeepCore2.0 is typically done on Fermilab GPUs, but a Condor setup available. There are 2 versions of DeepCore.py: One compatible with FNAL GPUs (singularity environment) and one that isn't, that is mainly used to produce parameter plots. The training can be re-started from a given epoch after adjusting hyperparameters and you can look at the loss plots at the end of each training step. Once a training is complete you can load that model (.h5 or .hdf5) in the DeepCore notebook and make some validation plots comparing targets and predictions. Score plots will allow you to determine an appropriate prediction threshold, parameter plots will help you evaluate how good your training is at prediction track parameters (dx, dy, deta, dphi, pt) and teh ROC curve will help you compare different trainings. You can also visualize the adc, target and predictied TCPs for a few merged clusters the 4 BPIX layers. 
 
-### Note: barrel or endcap training and status
-The barrel training has been fully performed, in 2017 conditions. The endcap training is still in development (about 150 epochs on a reduced sample processed and the results are unsatisfactory).
+## B) Set up (Fermilab GPUs):
+- ssh to any FNAL gpu server (1/2/3): ssh hichemb@cmslpcgpu1.fnal.gov -Y
+- Make a temporary (30 days) directory for your files using: mkdir /storage/local/data1/gpuscratch/hichemb/ 
+	- Or put files to write/ read from in that directory, you can look for it using:  /usr/bin/find /storage/local/data1/gpuscratch
+	- Check that the space is not full using: df -H
+- clone repo: git clone git@github.com:bouchamaouihichem/DeepCore.git
+- copy training samples to scratch directory: cp -r /eos/uscms/store/user/hichemb/DeepCore_Training/
+  	- The reason we include everything in the scratch directory is because this will improve the training speed.
+- Make a new directory for the training, copy training sample from eos, run the training:
+	- mkdir Training1103
+	- cd Training1103
+	- You need to manually split training data into training and validation (not testing!) by making a directory
+		- This means you need  to get an 80-20 split using file sizes or number of events
+		- Note that training output gives you the number of files used for training and validation to double check
+	- Then you should edit L516 to the path of your training files and L517 to the path of your validation files
+  - Set up singularity environment as shown in this [FNAL page](https://uscms.org/uscms_at_work/computing/setup/gpu.shtml)
 
-To repeat exactly the same training as the integrated barrel only training can be obtained changing `layNum` parameter of `DeepCore.py` from 7 to 4 and use the proper input. However it should be identical to provide an input sample with 7 layers but the layers 5,6,7 empty (obtained with the `barrelTrain` argument in the ntuplizer without changing the `layNum`.)
-
-## keras_to_TF
-It contains the script `keras_to_tensorflow_custom.py`, which convert the `.h5` model returned by the `DeepCore.py --training` step to a `.pb` model, used in CMSSW. Details in the documentation inside the script.
-
-## plotting_scripts
-some auto-esplicative python plotting script for loss, validation and performance comparison
-
-## data
-some relevant updated data, hardcoded in the `DeepCore.py` script:
-- barrel trained model (output of `DeepCore.py` --training): `DeepCore_barrel_weights.246-0.87.hdf5`
-- barrel trained model (output of `keras_to_tensorflow_custom.py`): `DeepCoreSeedGenerator_TrainedModel_barrel_2017_246ep.pb`
-- endcap weights after 150 epochs: `DeepCore_ENDCAP_train_ep150.h5`
-
-## old development
-Old development of DeepCore, kept for backup, but completely deprecated. ___Do Not Use!!!___
-- `toyNN.py` : first toy for DeepCore preliminary studies, without CMSSW input
-- `yoloJet.py` : full deeepCore NN developing, before integration in CMSSW
-- `NNPixSeed_yolo.py` : uncleaned version of `DeepCore.py`
-- `NNPixSeed_draw.py` : drawOnly version of the `NNPixSeed_yolo.py`
-
-
-
-
-<!--- A raw description of the directory tree (or particular branches):
-
-
-## trackjet directory:
-_DeepCore_ NN developing (python script, based on Keras-Tensorflow).
-* toyNN : first toy for DeepCore preliminary studies, without CMSSW input
-* yoloJet : full deeepCore NN developing, before integration in CMSSW
-* NNPixSeed : updated version of DeepCore, with input from CMSSW and in-developing features
-  * feature/new_par_try branch : old (merged) branch with new parametrization
-  * EndCap branch : branch for endcap integration
+## C) Running DeepCore Training (Fermilab GPUs):
+- ssh hichemb@cmslpcgpu1.fnal.gov -Y
+- cd to Training1103 in scratch directory
+- screen 
+- apptainer run -p --nv --bind /uscms/homes/h/hichemb/ --bind /cvmfs --bind /storage/local/data1/gpuscratch/hichemb/ /cvmfs/unpacked.cern.ch/registry.hub.docker.com/fnallpc/fnallpc-docker:tensorflow-latest-gpu-singularity
+	- adjust this command accordingly
+- Run DeepCore training command (details below)
+- Ctrl + A + D
+- logount and reconnect later to check on training by cd to the same directory then running: screen -r
+  	- Disclaimer: you're not supposed to use the interactive GPUs for multidays trainings
+  	- You can check if training is running using: ps ahux | grep hichemb
+  	- You kill background process when you know the process ID (PID): kill -9 'PID'
+- Training output:
+  	- weights.XXX.hdf5: This is your model after every epoch.
+  	- DeepCore_train_XXX.h5: This is your model at the end of the training step you ran. You can use this file to make predictions in DeepCore.py or with the DeepCore notebook.
+  	- DeepCore_mode_XXX.h5: This is your model as well, however thsi file is the one you will subsequently use when running workflows. Don't confuse thse 2 files.
+  	- loss_file_XXX.pdf: This pdf contains your loss plots.
+  	- loss_plots_XXX.pdf/loss_plots_full_XXX.csv: These files need to be loaded in the next training step so you can replot the loss function from the first epoch.
+- Example of DeepCore2.0 Training commands:
+    	- 1-5 epochs: nohup python ../training/DeepCore_GPU.py --training --epochs 5 > Training23_0622_1-5.log
+	- 6-10 epochs: nohup python ../training/DeepCore_GPU.py --training --continueTraining --epochs 5 --epochsstart 5 --weights weights.5-1.3783.hdf5 --csv loss_plots_0_5.csv >  Training23_0622_6-10.log
+    	- 11-15 epochs: nohup python ../training/DeepCore_GPU.py --training --continueTraining --epochs 5 --epochsstart 10 --weights weights.10-1.3783.hdf5 --csv loss_plots_full_0_10.csv >  Training23_0622_11-15.log
+- Once a training step is complete, don't forget to backup your work since files in the gpuscratch are deleted after 30 days.
  
- 
-## Missing directory (must be pushed in the future): 
-- [] trackjet/loss_plot  
-- [] trackjet/plot_performance_CMSS
-- [] trackjet/keras_to_TF
-- [] trackjet/Endcap_integration
-- [] pdf_peak_shift : the entire analysis
-- [] other missing stuff?
+## D) Running DeepCore Testing:
+- You can run testing anywhere (not singularity), but make sure you have enough memory to load the test sample, which is why I typically run it on FNAL gpu servers.
+- Adjust a few things in DeepCore.py before Testing:
+  	- Edit L756 to use the appropriate model (.h5).
+  	- Edit the prediction threshold, which you should have determine at this point after producing the Score plots in the DeepCore notebook.
+  	- Make sure the architecture, hyperparameters, loss functions used in DeepCore.py are the same as DeepCore_GPU.py
+- Testing Output:
+  	- DeepCore_prediction_XXX.npz: file containing target and predictions used to make histos in root.
+  	- DeepCore_mapValidation_XXX.root: contains pixels maps for a few merged clusters.
+  	- parameter_file_XXX.pdf: contains parameter plots (target distribution, predistion distribution, residuals distribution and 2D plots of prediction vs target) for all track parameters (dx, dy, deta, dphi, pt).
+- Example of DeepCore2.0 Training command using a testing sample file as input: nohup python ../training/DeepCore.py --input ../../DeepCore_Training/TestingSamples/DeepCoreTestingSample.root --predict --output > Validation23_0622.log &
 
--->
+## 3) Workflows (Convert_h5_to_pb/ and efficiency_plots/)
+## A) model.h5 to model.pb conversion:
+- After completing a training and obtaining the DeepCore_model_XXX.h5 file (do NOT use DeepCore_train_XXX.h5 for this), you need to use DeepCore/Convert_h5_to_pb/h5_to_pb.py to convert your model to .pb (model extension used in CMSSW workflows)
+	- Due to compatibility issues, I run it the following way, but you can run it locally if you use the appropriate python, tensorflow and keras versions
+		- ssh to fermilab gpu server, and copy the relevant script and .h5 file there (clone the DeepCore repo if you haven't done so).
+		- Edit h5_to_pb.py: adjust path of input file and name and directory of output file
+		- Run singularity environment and run the script: 
+			- apptainer run -p --nv --bind /uscms/homes/h/hichemb/ --bind /cvmfs --bind /storage/local/data1/gpuscratch/hichemb/ /cvmfs/unpacked.cern.ch/registry.hub.docker.com/fnallpc/fnallpc-docker:tensorflow-latest-gpu-singularity
+			- python h5_to_pb.py
+		- Copy DeepCore_model_XXX.pb to DeepCore/efficiency_plots
+  
+## B) Setup:
+-  Use one of the latest CMSSW versions to avoid errors running workflows : cmsrel CMSSW_13_0_11
+	- mainly so we can use latest detector condition with BPIX holes: --conditions 130X_mcRun3_2023_realistic_relvals2023D_v1
+- cd CMSSW_13_0_11/src/
+- scram b -j 8 
+	- git cms-addpkg will not work/ take a long time otherwise
+- cmsenv
+- voms-proxy-init -voms cms
+- git cms-addpkg RecoTracker
+- git cms-addpkg Configuration/DataProcessing
+- git cms-addpkg Validation/RecoTrack
+- scram b -j 8
+- cp -r ~/nobackup/princeton/project2/CMSSW_10_2_5/src/DeepCore/effiency_plots/ .
+- Necessary directory to load model when running crab jobs: cp -r effiency_plots/data RecoTracker/TkSeedGenerator/
+- Use latest version of DeepCoreSeedGenerator.cc : cp effiency_plots/DeepCoreSeedGenerator.cc RecoTracker/TkSeedGenerator/plugins/DeepCoreSeedGenerator.cc
+- Use latest version of JetCoreRegionalStep_cff.py : cp effiency_plots/JetCoreRegionalStep_cff.py RecoTracker/IterativeTracking/python/JetCoreRegionalStep_cff.py
+- Adjust [JetCoreRegionalStep_cff.py](https://github.com/cms-sw/cmssw/blob/dc2b480cfd4dba1c83d67100362b03759c314553/RecoTracker/IterativeTracking/python/JetCoreRegionalStep_cff.py#L13-L16) if needed:
+	- disable jetcore outside of barrel by editing RecoTracker/IterativeTracking/python/JetCoreRegionalStep_cff.py:
+		- jetsForCoreTracking = cms.EDFilter('CandPtrSelector', src = cms.InputTag('ak4CaloJetsForTrk'), cut = cms.string('pt     > 100 && abs(eta) < 1.4'), filter = cms.bool(False))
+		- jetsForCoreTrackingBarrel = jetsForCoreTracking.clone( cut = 'pt > 100 && abs(eta) < 1.4' )
+		- jetsForCoreTrackingEndcap = jetsForCoreTracking.clone( cut = 'pt > 10000000 && abs(eta) < 1.4' )
+	- Enable jetcore + deepcore in the barrel and jetcore in the endcaps by editing RecoTracker/IterativeTracking/python/JetCoreRegionalStep_cff.py:
+		- jetsForCoreTracking = cms.EDFilter('CandPtrSelector', src = cms.InputTag('ak4CaloJetsForTrk'), cut = cms.string('pt   > 100 && abs(eta) < 2.5), filter = cms.bool(False))
+		- jetsForCoreTrackingBarrel = jetsForCoreTracking.clone( cut = 'pt > 100 && abs(eta) < 1.4' )
+		- jetsForCoreTrackingEndcap = jetsForCoreTracking.clone( cut = 'pt > 100 && abs(eta) < 2.5' )
+		- MaxCand can be edited in L161 for JetCore and DeepCore seperately			
+- adjust true particle selection to ignore the ones outside barrel by editing [Validation/RecoTrack/python/TrackingParticleSelectionsForEfficiency_cff.py](github.com/cms-sw/cmssw/blob/87aa86684413a8056be46ed8bc1377e4c9954d66/Validation/RecoTrack/python/TrackingParticleSelectionsForEfficiency_cff.py)
+	- change min/max eta to -1.4/1.4: L10-14 and L34-35
+	- You can also change true track selection here: 
+		- e.g change min pt to 10 GeV: L12 and L26 (This is an example, don't change minpt in a normal workflow!)
+	- You'll need to rerun all the workflow to undo changes here
+- Change x axis binning for efficiency vs R plots:
+  	- Edit [Validation/RecoTrack/python/plotting/trackingPlots.py](https://github.com/cms-sw/cmssw/blob/93e2e3051588c8f931cb559201d76f9edafdb9ec/Validation/RecoTrack/python/plotting/trackingPlots.py):
+		- change L213 in from common=dict(xlog=True) to common=dict(xlog=False, xmin=0, xmax = 20)
+		- This will change the axis to linear instead of log and adjust the range from 0 to 20
+		- It will NOT change the bins themselves
+  	- Edit [Validation/RecoTrack/src/MTVHistoProducerAlgoForTracker.cc](github.com/cms-sw/cmssw/blob/87aa86684413a8056be46ed8bc1377e4c9954d66/Validation/RecoTrack/python/TrackingParticleSelectionsForEfficiency_cff.py):
+		- change L194 to false so the bins are not logs
+		- change L193 to N adjust bin width such that:
+			- bin width = 100cm/N, so for 1 cm bins N = 100
+			- I recommend picking N = 200 for 0.5cm bins
+	- To change binning for other plots, follow similar steps.
+	- It's better to make this change during the initial setup, but if you forgot, you can make these changes, compile and rerun step3 for the binning to changed
+- Change y axis range for all plots:
+	- Edit Validation/RecoTrack/python/plotting/trackingPlots.py:
+		- change L23 to adjust max eff for all plots
+		- change L181-L187 to adjust max eff/fake for pt and eta plots (ymax=)
+- to see all other commands to adjust plots:
+	- vim [Validation/RecoTrack/python/plotting/plotting.py](https://github.com/cms-sw/cmssw/blob/87aa86684413a8056be46ed8bc1377e4c9954d66/Validation/RecoTrack/python/plotting/plotting.py)
+- scram b -j 8
 
-# DeepCore Updated
+## C) Runnning Workflows using Crab:
+- ssh and cd to effiency_plots/
+- cmsenv
+- voms-proxy-init -voms cms
+- make workflow crab directory by copying available template: 
+	- cp -r crab_test/ crab_11923
+	- cd crab_11923
+- Print out the each command needed for running a workflow (4 steps)
+	- nohup runTheMatrix.py -w upgrade -l 11923.17 --command='-n 1' -j 8 -t 4 --dryRun > test.log 
+	- This will not run the workflow, but give you the cmsDriver commands needed.
+- Run step 1 + 2 command to obtain cmsDriver_step12.py:
+	- Adjust the command below by replacing condition, pileup, pileup sample..etc using the commands for step 1 and 2 of the workflow as reference:
+		- for example if the workflow you are running does not include pileup, then remove that part from the command above (as well as pileup_input)
+		- Also you can adjust the pileup input sample if the default one is giving you errors because it is not available
+	- **[Run modified version, not this exact line!]**  cmsDriver.py QCD_Pt_1800_2400_14TeV_TuneCP5_cfi -s GEN,SIM,DIGI:pdigi_valid,L1,DIGI2RAW,HLT:@relval2022 --conditions auto:phase1_2022_realistic --beamspot Realistic25ns13p6TeVEarly2022Collision --datatier GEN-SIM-DIGI-RAW --eventcontent FEVTDEBUGHLT -n 1 --geometry DB:Extended --era Run3 --pileup Run3_Flat55To75_PoissonOOTPU --pileup_input das:/RelValMinBias_14TeV/CMSSW_13_0_0_pre4-130X_mcRun3_2022_realistic_v2-v1/GEN-SIM --python_filename cmsDriver_step12.py --fileout file:step2.root > log_step12.txt
+ - Edit step12 crab config file (cmsDriver_step12.py):  
+	- input = cms.untracked.int32(10000),
+	- numberOfThreads = cms.untracked.uint32(8),
+	- annotation = cms.untracked.string('QCD_Pt_1800_2400_14TeV_TuneCP5_cfi nevts:10000'),
+- Edit step12 crab submit file (step12_crab.py) as needed:
+	- specify name, number of jobs..etc (:%s/12034/11923/gc to replace with vim)
+	- Adjust lines as needed depending on QCD or Ttbar
+	- make sure the name is not long and does not contain "."
+- crab submit step12_crab.py
+ 	- This will generate the GEN,SIM,RAW of the specified workflow. You will only need to run Step1+2 once for each workflow. Step 3 is the RECO step and uses diffent models (JetCore or DeepCore) depending on the changes you make.
+	- save the publication dir since you will need it in the crab submit file for step 3
+	- check status with: crab status -d workflows_crab_11923/crab_DeepCore_11923_step12
+- before running step 3, adjust DeepCoreSeedGenerator.cc:
+	- make sure model is in the appropriate dir: ../RecoTracker/TkSeedGenerator/data/DeepCore/
+	- adjust file to use appropriate model and thresholds (changes needed in about 5 lines)
+- run step3 to obtain crab config:
+	- **[Run modified version, not this exact line!]** cmsDriver.py step3  -ss RAW2DIGI,L1Reco,RECO,RECOSIM,PAT,NANO,VALIDATION:@standardValidation+@miniAODValidation,DQM:@standardDQM+@ExtraHLT+@miniAODDQM+@nanoAODDQM --conditions auto:phase1_2022_realistic --datatier GEN-SIM-RECO,MINIAODSIM,NANOAODSIM,DQMIO --eventcontent RECOSIM,MINIAODSIM,NANOEDMAODSIM,DQM --geometry DB:Extended --era Run3 --procModifiers seedingDeepCore --pileup Run3_Flat55To75_PoissonOOTPU --pileup_input das:/RelValMinBias_14TeV/CMSSW_13_0_0_pre4-130X_mcRun3_2022_realistic_v2-v1/GEN-SIM -n 1  --nThreads 8 --python_filename cmsDriver_step3.py --filein  file:step2.root  --fileout file:step3.root  > log_step3.txt
+- edit step3 crab config file (cmsDriver_step3.py): 
+	- input = cms.untracked.int32(10000),
+	- numberOfThreads = cms.untracked.uint32(8),
+	- annotation = cms.untracked.string('QCD_Pt_1800_2400_14TeV_TuneCP5_cfi nevts:10000'),
+	- To run Jetcore:
+		- comment out from Configuration.ProcessModifiers.seedingDeepCore_cff import seedingDeepCore
+		- replace process = cms.Process('RECO',Run3,seedingDeepCore) by process = cms.Process('RECO',Run3)
+   		- you can make the JetCore cmsDriver.py config file by running step3 without --procModifiers seedingDeepCore
+	- To run different DeepCore model, adjust DeepCoreSeedGenerator.cc and **compile** (scram b -j 8 from src/) 
+- edit step3 crab config file (step3_crab.py):
+	- specify names, input dataset ..etc (:%s/12034/12312/gc)
+	- Adjust names as needed depending on model: DeepCore213, DeepCore10 or JetCore
+- crab submit step3_crab.py
+	- crab status -d workflow_crab_13723/crab_DeepCore_13723_step3_DC213
+- Before running step 4, you need to add the files together and you cannot hadd. Make step3_files/ directory in crab_11923/ and run these commands:
+	- copy step3 root files from eos: cp /eos/uscms/store/user/hichemb/DeepCore_11923_step12_1k/DeepCore_11923_s3_1k_jetcore/230318_210317/0000/step3_inDQM_* .
+	- python3 ../../../Configuration/DataProcessing/test/RunMerge.py --input-files=file:step3_inDQM_1.root,file:step3_inDQM_2.root,file:step3_inDQM_3.root,file:step3_inDQM_4.root,file:step3_inDQM_5.root,file:step3_inDQM_6.root,file:step3_inDQM_7.root,file:step3_inDQM_8.root,file:step3_inDQM_9.root,file:step3_inDQM_10.root --output-file=Merged.root --dqmroot
+   		- Note that you need to adjust number of input files as needed
+	- cmsRun -j FrameworkJobReport.xml RunMergeCfg.py
+   	- cp Merged.root ../
+ - Run step4 after double checking you are using the right model and thresholds:
+   	- **[Run modified version, not this exact line!]** cmsDriver.py step4  -s HARVESTING:@standardValidation+@standardDQM+@ExtraHLT+@miniAODValidation+@miniAODDQM+@nanoAODDQM --conditions auto:phase1_2022_realistic --mc  --geometry DB:Extended --scenario pp --filetype DQM --era Run3 --procModifiers seedingDeepCore --pileup Run3_Flat55To75_PoissonOOTPU --pileup_input das:/RelValMinBias_14TeV/CMSSW_13_0_0_pre4-130X_mcRun3_2022_realistic_v2-v1/GEN-SIM -n 1000 --nThreads 8 --filein file:Merged.root --fileout file:step4.root  > log_step4.txt
+   	  - to run jetcore, just delete --procModifiers seedingDeepCore
+- rename DQM file and move it: mv DQM_V0001_R000000001__Global__CMSSW_X_Y_Z__RECO.root DQM_plots/11923_DC221.root
 
-## Set Up Instructions
-- Set the appropriate architecture:
-   - ```setenv SCRAM_ARCH slc6_amd64_gcc700```
-   - You can check which architecture you're using with: ```echo $SCRAM_ARCH```
-- ```cmsrel CMSSW_10_2_5```
-- ```cd CMSSW_10_2_5/src/```
-- ```git clone https://github.com/bouchamaouihichem/DeepCore.git```
-- Compiling: ```scram b -j 8```
-- ```cd DeepCore/```
-- ```cmsenv```
+## D) Making effciciency/fake rate plots and publishing them:  
+- Once you get the DQM_XXX.root files you can make the efficiency plots. I recommend setting up an online CERN website to host them so it's easier to share with the group as well as Track POG and CERN people in general (details below).
+- cd to DMQ_plots/ and run:  makeTrackValidationPlots.py --extended Valerio_11723.root Hichem_11723.root
+	- --extended includes more plots (e.g: bunch of distributions)
+- Backup workflow (DQM.root):
+	- mkdir /eos/uscms/store/user/hichemb/workflows/JetCore_1k_11634
+	- cp *.root /eos/uscms/store/user/hichemb/workflows/JetCore_1k_11634
+- copy plots to my eos directory and on website: 
+	- mkdir /eos/uscms/store/user/hichemb/efficiency_plots/11634.17/
+	- cp -r plots/* /eos/uscms/store/user/hichemb/efficiency_plots/11634.17
+- login to lxplus and make adjustments to index.html:
+	- ssh hboucham@lxplus.cern.ch -YC
+	- mkdir /eos/user/h/hboucham/www_hichem/11634.17
+	- from fermilab: scp -r plots/* hboucham@lxplus.cern.ch:/eos/user/h/hboucham/www_hichem/11634.17
+	- vim /eos/user/h/hboucham/www_hichem/index.html
+		- add line:  ```<li style ="font-size:25px;"><a href="11634.17/index.html">Worflow 11634.17</a></li>```
+	- vim /eos/user/h/hboucham/www_hichem/11634.17/index.html: copy full workflow name and include cmssw version under <body>:
+		- ```Workflow: 11634.17 2021_seedingDeepCore+TTbar_14TeV_TuneCP5_GenSim+Digi+RecoNano+HARVESTNano```
+		- ```<br> CMSSW_12_6_0_pre2 -n 1000```
+		- ```<br> Comparison between JetCore and DeepCore2.0```
+	- Look at the plots on your personal website https://hboucham.web.cern.ch/
+- Alternatively (especially convenient for testing),  you can copy the efficiency plots to your local machine faster and just double click on index.html
+	- from local machine: scp -r hichemb@cmslpc-sl7.fnal.gov:/uscms_data/d3/hichemb/princeton/project2/workflow_10k/CMSSW_13_0_11/src/effiency_plots/crab_11923_barrel_10k/DQM_plots/plots /mnt/c/Users/bouch/DeepCore_plots/Barrel_JC_DC1_DC2_comparison
+   	- or open pdf if you have X11 forwarding enabled in your ssh.config locally: gio open plot.pdf
 
-## Running Deepcore Training Locally
-- ```cd to Deepcore directory```
-- make directory for training and cd there:
-	- ```mkdir TrainingLocal1019```
-	- ```cd TrainingLocal1019```
-- locate training sample: ``` ls /eos/uscms/store/user/hichemb/RelValQCD_Pt_1800_2400_14/DeepCoreTrainingSample/211017_181642/0000/DeepCoreTrainingSample.root ```
-- ```python ../training/DeepCore.py --training --input /eos/uscms/store/user/hichemb/RelValQCD_Pt_1800_2400_14/DeepCoreTrainingSample/211017_181642/0000/DeepCoreTrainingSample.root ```
+## E) Running workflows for Timing Studies:
+- The reference  workflow to evaluate the time it takes to reconstruct tracks with a given model is workflow 11834.17 and 10k events (compatible with 13_0_0_pre4 )
+	- refer to the usual steps to run a workflow until step 3
+- Run the modified step 3 command below:
+	- **[Run modified version, not this exact line!]** cmsDriver.py step3 -s RAW2DIGI,RECO:reconstruction_trackingOnly --conditions 130X_mcRun3_2023_realistic_relvals2023D_v1 --beamspot Realistic25ns13p6TeVEarly2023Collision --datatier AOD --eventcontent AOD --geometry DB:Extended --era Run3  --procModifiers seedingDeepCore --pileup Run3_Flat55To75_PoissonOOTPU --pileup_input das:/RelValMinBias_14TeV/CMSSW_13_0_0_pre4-130X_mcRun3_2022_realistic_v2-v1/GEN-SIM -n 1 --python_filename cmsDriver_step3.py --filein file:step2.root --fileout file:step3.root --customise Validation/Performance/TimeMemoryInfo.py --no_exec RAW2DIGI,RECO:reconstruction_trackingOnly,ENDJOB
+	- This command runs much faster since it only uses specific modules from the track reconstruction
+	- adjust as needed for different workflows
+	- remove --procModifiers seedingDeepCore when running with JetCore
+ - Edit cmsDriver_step3.py:
+	- input = cms.untracked.int32(10000),
+	- include the appropriate path to the inputs files (step12 output in your eos)
+	- Copy the lines in the Timing Service Twiki  at the very end 
+		- you're not using a separate harvesting job so you'll need to apply small changes as instructed in the Twiki
+	- Compare to cmsDrive_step3_JC.py for reference
+- Adjust the model you're using by editing DeepCoreSeedGenerator.cc and compiling 
+- cmsRun cmsDriver_step3.py
+	- The Timing information will be printed out after all 10k events are processed
+   	- make sure you run the same machine (e.g: cmslpc104) and that it is not in use (check that with command: top)
+   	- Normalize modules timing by looking at a module that is independent of the model used (JetCore or DeepCore2.0) like "ConvTrackCandidates"
+	- For some reason I can't pipe output of this command to a log file in csh, so use bash:
+		- bash
+		- nohup cmsRun cmsDriver_step3.py > step3_timing.txt &
 
-## Running DeepCore Training using Fermilab GPUs:
-- ssh to gpu machine using: ```ssh hichemb@cmslpcgpu1.fnal.gov -Y``` (1, 2 or 3)
-- Locate training samples after running Ntuplizer and divide them in Training and Validation samples: ```ls /eos/uscms/store/user/hichemb/RelValQCD_Pt_1800_2400_14/DeepCoreTrainingSample/211017_181642/0000/DeepCoreTrainingSample.root -lrth ```
-- Make a directory in gpu scracth area (beware: files there are automatically deleted afer 30 days) using: ```mkdir /storage/local/data1/gpuscratch/hichemb/ ```
-	- You can look for it using:  ```/usr/bin/find /storage/local/data1/gpuscratch```
-	- Check that the space is not full using: ```df -H```
-- Use tar to copy DeepCore directory (that you set up somewhere else) to gpuscratch directory:
-   - ```cd nobackup/princeton/project2/CMSSW_10_2_5/src/ ```
-   - ```tar -zcvf DeepCore.tar *```
-   - ```cd /storage/local/data1/gpuscratch/hichemb/```
-   - ```tar -xf /uscms_data/d3/hichemb/princeton/project2/CMSSW_10_2_5/src/DeepCore.tar```
-- Make a new directory for the training, copy training sample and run the training: 
-   - ```mkdir Training1103```
-	- ```cd Training1103```
-	- ```cp /eos/uscms/store/user/hichemb/RelValQCD_Pt_1800_2400_14/DeepCoreTrainingSample/211017_181642/0000/DeepCoreTrainingSample.root .```
-	- If your training sample is too big (you will run into memory issues), you need to use the Generator to use a central sample. This means you will open each file as you're training DeepCore. You will need to manually split your files into training and validation (not testing!) and you will need to specify the path for the training files directory and the validation files directory in DeepCore_GPU.py. You should still be able to run validation using your testing sample without using the Generator (it can handle at least 150k testing inputs), though you need to be in the gpu scratch directory to have enough memory.
-	- This command open the singularity image you use to run on Fermilab GPUs: 
-	   - ```singularity run --nv --bind `readlink $HOME` --bind `readlink -f ${HOME}/nobackup/` --bind /cvmfs --bind /storage/local/data1/gpuscratch/hichemb/ /cvmfs/unpacked.cern.ch/registry.hub.docker.com/fnallpc/fnallpc-docker:tensorflow-latest-gpu-singularity```
-	   - For more details, check:
-	      - https://uscms.org/uscms_at_work/computing/setup/gpu.shtml
-	      - https://awesome-workshop.github.io/docker-singularity-hats/09-singularity/index.html
-	      - https://hub.docker.com/r/fnallpc/fnallpc-docker#use-instructions
-	- ```python ../DeepCore/training/DeepCore_GPU.py --training --input DeepCoreTrainingSample.root```
-	  	- To check if GPU is being used, open another window, ssh to the same machine, find your process using ```top``` to locate the Process ID (PID) and run: ```watch -n3 nvidia-smi```. One of the processes running on the GPU should have a matching PID to yours
-	-  if using the generator, in which case the training sample is the central sample (so no need to specify a local input using --input), you should run this command, which will also run the training in the background and pipe print outs to a log file:
-		- ```§ nohup python ../DeepCore/training/DeepCore_GPU.py --training  > Training0217.log &```
-		- To kill the training, you can find your process using ```top``` to locate the Process ID (PID) then ```kill -9 'PID'```
-	- exit singularity when training is done: ```exit```
-	- The output is:
-	  	- weights.01-33.19.hdf5 * number of epochs used, so 30 files for 30 epochs: These are the weights saved every batch
-		- DeepCore_train_ev5516.0_ep3.h5 : Weight file to be used for prediction, need to be hard-coded in DeepCore.py for prediction
-		- DeepCore_model_ev5516.0_ep3.h5 : Weight file to be used in CMSSW
-		- loss_file_ep3_ev5516.0.pdf : file with loss evolution
-	- Rename loss file to loss_file_Training1103.pdf 
-	- Delete weight files per epoch: ```rm weight*```
-	- Rename model weight file to DeepCore_train_1103.h5
-- Copy training output outside of gpuscrath since files older than 30 days are automatically deleted:
-   - ```cp -r Training1103/ ~/nobackup/princeton/project2/CMSSW_10_2_5/src/DeepCore/```
-   - Don't copy the training sample
-- I you need to add more epochs to your training, you may use the arguments --continueTraining to indicate that you are continuing a previous training, --epochs to specify the number of epochs, --epochsstart to specify from which epoch you're continuing and --weights to specify which weight file to use to continue training
-	- e.g: to continue training from 20 epochs and adding 30 epochs, I would use the following command: ```python ../DeepCore/training/DeepCore_GPU.py --training --continueTraining --input DeepCoreTrainingSample.root --epochsstart 20 --weights weights.20-5.81.hdf5 --epochs 30```
-
-
-
-## Running DeepCore Training using CERN GPUs:
-- cd to your DeepCore directory on lxplus
-- Make Training folder for output and move training file there:
-	- ```mkdir Training1204```
-	- ```cp DeepCoreTrainingSample.root Training1204/DeepCoreTrainingSample.root```
-- ```cd Condor_GPUs```
-- Adjust directory in Condor_DeepCore.sh and compile: ```chmod +x Condor_DeepCore.sh```
-- Adjust number of GPU/CPU required in Condor_DeepCore.sub 
-- Submit jobs and monitor progress:
-	- ```condor_submit Condor_DeepCore.sub```
-	- ```condor_q```
-
-
-
-## Running DeepCore Validation (locally, no GPUs required)
-- ssh to your regular machine.
-- Go to Training1103 directory and locate the Validation sample:
-   	- ```cd ~/nobackup/princeton/project2/CMSSW_10_2_5/src/DeepCore/Training1107/```
-	- ```ls /eos/uscms/store/user/hichemb/RelValQCD_Pt_1800_2400_14/DeepCoreTrainingSample/211017_181642/0000/DeepCoreValidationSample.root ```
-- Edit L756 in DeepCore.py to include model weight file (NOT DeepCore_GPU.py):
-	- ```vim ../training/DeepCore.py```
-	- model.load_weights('../Training1103/Deepcore_train_1103.h5')
-- Run prediction command from Training1103 directory so the output is there: ```python ../training/DeepCore.py --input /eos/uscms/store/user/hichemb/RelValQCD_Pt_1800_2400_14/DeepCoreTrainingSample/211017_181642/0000/DeepCoreValidationSample.root --predict --output```
-- If your run into memory issues loading the validation sample:
-	- ssh to the gpu server where you ran your training and copy your testing file to Training1103
-	- Since running validation requires a cmssw environment do the following:
-	- ```cd ~/nobackup/princeton/project2/CMSSW_10_2_5/src/DeepCore/Training1107/```
-	- ```cmsenv``` 
-	- cd back to Training1103 directory in gpu scratch
-	- Now you may run validation using the same command: ```python ../training/DeepCore.py --input DeepCoreTestingSample.root --predict --output```
-- Output from validation:
-  	- DeepCore_prediction_ev673.6.npz: returned by prediction, file used to make root and pdf files
-	- DeepCore_mapValidation_ev673.6.root: hit maps in root
-	- parameter_file_ev673.6.pdf: parameter file pdf
-- Rename parameter file to parameter_file_1103.pdf
-
-# Ntuplizer Updated
-
-## Ntuplizer Updated Repo: https://github.com/bouchamaouihichem/cmssw/tree/CMSSW_12_0_0_pre4_DeepCore_H/RecoTracker/DeepCoreTraining
-
-## Set Up Instructions
-- Make sure you're using the same CMSSW version as your dataset
-- ```cmsrel CMSSW_12_0_0_pre4```
-- ```cd CMSSW_12_0_0_pre4/```
-- ```cmsenv```
-- ```git cms-init```
-- ``` git remote add -f Hichem https://github.com/bouchamaouihichem/cmssw.git ```
-- ```git checkout Hichem/CMSSW_12_0_0_pre4_DeepCore_H```
-- ```scram b -j 8```
-- ```cd RecoTracker/DeepCoreTraining/test/```
-- To set up a new CMSSW release to run the Ntuplizer on a dataset with the same CMSSW version:
-	- ```cmsrel CMSSW_12_1_1```
-	- ```cd CMSSW_12_1_1/src/```
-	- ```scram b -j 8 ```
-	- ```cmsenv```
-	- ```git cms-addpkg RecoTracker```
-	- ```cd RecoTracker/```
-	- copy Ntuplizer folder from other CMSSW release directory: ```cp -r ~/nobackup/princeton/project2/CMSSW_12_0_0_pre4/src/RecoTracker/DeepCoreTraining/```
-	-```cd .. (to src)```
-	-```scram b -j 8```
-
-
-## Running Ntuplizer Locally
-- Edit ```test_DeepCorePrepareInput.py	```
-	- edit in AODSIM file L35 and GEN-SIM/ GEN-SIM-DIGI-RAW files L39-41
-	- edit output filename if needed L60 but make sure it's the same input file name for ```test_DeepCoreNtuplizer.py ```
-- ```cmsRun test_DeepCorePrepareInput.py```
- 	- Running this takes some time
-- Edit test_DeepCoreNtuplizer.py 
-	- Edit input file name in L23
-	- Edit output file name in L62
-- ```cmsRun test_DeepCoreNtuplizer.py ```
-- The output file may be used for DeepCore training or validation
-
-## Running Ntuplizer using crab jobs (recommended)
-- ```voms-proxy-init --voms cms```
-- Edit ```test_DeepCorePrepareInput_crab.py```
-	- edit in AODSIM dataset L13 and GEN-SIM/ GEN-SIM-DIGI-RAW dataset L14
-	- edit number of jobs and units per jobs L29-30 depending on the number of events in the dataset
-	- If you want to use your own eos space to host the intermediate files:
-		- comment out this line ```config.Data.outLFNDirBase = '/store/group/phys_tracking/Hichemb/DeepCoreNtuplizer/'```
-		- replace site ```T2_CH_CERN``` by ```T3_US_FNALLPC```
-- Submit crab job: ``` crab submit test_DeepCorePrepareInput_crab.py```
-- When your jobs are complete, you need to find the name of the dataset published in DBS. To do that you can look at the end of the crab.log file of the jobs you submitted:
-	- ```vim crab_projects/crab_DeepCorePrepareInput/crab.log```
-	- It looks something like this: ```/RelValQCD_Pt_1800_2400_14/hboucham-DeepCoreNtuplizerInput-6d87375326d3f4c3992ae44982f1a1bf/USER```
-- Edit ```test_DeepCoreNtuplizer_crab.py```
-	- edit input file name of the published job on DBS in L17
-- Submit crab job: ```crab submit test_DeepCoreNtuplizer_crab.py```
-- Once the crab job is complete, your files will be located in your eos directory and may be used for DeepCore training and validation
+## F) CERN website setup:
+- Make a directory on lxplus eos (from your lxplus account): mkdir /eos/user/h/hboucham/www
+- Copy files from fermilab to that lxplus directory: rsync -r /eos/uscms/store/user/hichemb/11923.17/plots/* hboucham@lxplus.cern.ch:/eos/user/h/hboucham/www
+- Go to [CERNBox](https://cernbox.docs.cern.ch) to share access to this folder on webeos following these instructions
+- Go to this [WebEOS](https://webservices-portal.web.cern.ch/webeos/) and make the website following [these rules](https://webeos.docs.cern.ch/create_site/), e.g:
+	- test
+	- test-deepcore-efficiency-plots
+	- Link to efficiency plots of workflow 11923.17 comparing the efficiency plots of DeepCore barrel model 2017 (DQM_1) to DeepCore barrel model 2022 (DQM_2)
+	- /eos/user/h/hboucham/www
+	- Wait a few minutes, website is: https://test-deepcore-efficiency-plots.web.cern.ch
+- Alternatively, you want to make a personal website in the future where you can host all your plots for each workflow and more
+	- personal
+	- Hboucham
+	- website containing Hichem's work on DeepCore and more
+	- eos/user/h/hboucham/www_hichem
+	- Wait a few minutes, website is:  https://hboucham.web.cern.ch/
+	- Customize your website using html 
 
 
 
