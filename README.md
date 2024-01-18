@@ -1,4 +1,4 @@
-# DeepCore Framework
+# DeepCore2.0 Framework
 
 This repository contains the code and instructions related to the DeepCore2.0 framework. The Ntuplizer makes the training samples used for DeepCore2.0 trainings and the workflows are used to evaluate DeepCore2.0 models. This repository will include instructions to run the complete framework from scratch. More information and documentation about DeepCore2.0 can be found in the Twiki: https://twiki.cern.ch/twiki/bin/view/CMSPublic/TrackingPOGRun3DeepCoreV2
 
