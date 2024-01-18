@@ -1,6 +1,11 @@
 # DeepCore2.0 Framework
 
-This repository contains the code and instructions related to the DeepCore2.0 framework. The Ntuplizer makes the training samples used for DeepCore2.0 trainings and the workflows are used to evaluate DeepCore2.0 models. This repository will include instructions to run the complete framework from scratch. More information and documentation about DeepCore2.0 can be found in the Twiki: https://twiki.cern.ch/twiki/bin/view/CMSPublic/TrackingPOGRun3DeepCoreV2
+This repository contains the code and instructions related to the DeepCore2.0 framework. The Ntuplizer makes the training samples used for DeepCore2.0 trainings and the workflows are used to evaluate DeepCore2.0 models. This repository will include instructions to run the complete framework from scratch. 
+
+More information and documentation about DeepCore2.0 can be found here:
+- Twiki (public): https://twiki.cern.ch/twiki/bin/view/CMSPublic/TrackingPOGRun3DeepCoreV2
+- Track POG slides (internal): https://hboucham.web.cern.ch/Track_POG_slides/index.html
+- Hichem's prethesis (internal and outdated results): https://hboucham.web.cern.ch/Hichem_Prethesis/index.html
 
 ## 1) The Ntuplizer (Ntuplizer/DeepCoreTraining)
 ## A) Introduction:
